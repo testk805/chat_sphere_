@@ -1,0 +1,64 @@
+$primary: #4aff88;
+$grad: linear-gradient(
+  217deg,
+  rgba(237, 139, 28, 0.958420868347339) 13%,
+  rgba(202, 36, 74, 0.9612219887955182) 37%,
+  rgba(146, 55, 117, 0.958420868347339) 54%,
+  rgba(2, 104, 228, 0.9668242296918768) 90%
+);
+$grad1: linear-gradient(
+  217deg,
+  rgba(202, 36, 74, 0.9612219887955182) 13%,
+  rgba(237, 139, 28, 0.958420868347339) 37%,
+  rgba(2, 104, 228, 0.9668242296918768) 54%,
+  rgba(146, 55, 117, 0.958420868347339) 90%
+);
+$white: #fff;
+$black: #000;
+$mfont: "Jost", serif;
+$ifont: "Playwrite IN", serif;
+$trans: 0.3s all ease-in-out;
+
+@import url("https://fonts.googleapis.com/css2?family=Jost:ital,wght@0,100..900;1,100..900&family=Playwrite+IN:wght@100..400&display=swap");
+
+@mixin xxxl {
+  @media only screen and (max-width: 2000.98px) {
+    @content;
+  }
+}
+
+@mixin xxl {
+  @media only screen and (max-width: 1500.98px) {
+    @content;
+  }
+}
+@mixin xl {
+  @media only screen and (max-width: 1200.98px) {
+    @content;
+  }
+}
+@mixin lg {
+  @media only screen and (max-width: 1199.98px) {
+    @content;
+  }
+}
+@mixin md {
+  @media only screen and (max-width: 991.98px) {
+    @content;
+  }
+}
+@mixin sm {
+  @media only screen and (max-width: 767.98px) {
+    @content;
+  }
+}
+@mixin xs {
+  @media only screen and (max-width: 575.98px) {
+    @content;
+  }
+}
+@mixin cw($value) {
+  @media only screen and (max-width: $value) {
+    @content;
+  }
+}
