@@ -819,7 +819,7 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
                   </div>
                 </li>
               ))}
-              <div ref={messagesEndRef} />
+              <div ref={messagesEndRef} /> 
             </ul>
 
             <form
