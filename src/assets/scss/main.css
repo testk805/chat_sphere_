@@ -42,7 +42,8 @@ body {
 }
 .slider_main .slick-dots {
   position: absolute;
-  bottom: 10px; /* Adjust position */
+  bottom: 10px;
+  /* Adjust position */
   left: 50%;
   transform: translateX(-50%);
   list-style: none;
@@ -215,27 +216,33 @@ body {
   display: none;
 }
 .login .left_login .main_left {
-  -ms-overflow-style: none; /* IE and Edge */
-  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none;
+  /* IE and Edge */
+  scrollbar-width: none;
+  /* Firefox */
 }
 
 /* Webkit Browsers (Chrome, Edge, Safari) */
 ::-webkit-scrollbar {
-  width: 8px; /* Scrollbar width */
+  width: 8px;
+  /* Scrollbar width */
 }
 
 ::-webkit-scrollbar-track {
-  background: #f1f1f1; /* Track color */
+  background: #f1f1f1;
+  /* Track color */
   border-radius: 10px;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: #000; /* Scroll thumb color */
+  background: #000;
+  /* Scroll thumb color */
   border-radius: 10px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: #000; /* Hover effect */
+  background: #000;
+  /* Hover effect */
 }
 
 /* Firefox */
@@ -783,4 +790,148 @@ body {
 
 .word {
   word-wrap: break-word;
+}
+
+.testimonial {
+  position: relative;
+}
+.testimonial .slider_box {
+  background-color: #fff;
+  border-radius: 15px;
+  box-shadow: 0px 3px 8px rgba(0, 0, 0, 0.39);
+}
+.testimonial .slider_box p {
+  font-size: 18px;
+  line-height: 24px;
+  color: #212121;
+  font-weight: 400;
+}
+.testimonial .slider_box p span {
+  font-size: 16px;
+}
+.testimonial .slider_box h4 {
+  font-size: 20px;
+  color: #212121;
+  font-weight: 500;
+}
+.testimonial .slider_box .star_icon svg {
+  fill: #f2b001;
+  stroke: #f2b001;
+}
+.testimonial::before {
+  position: absolute;
+  content: "";
+  width: 30%;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  z-index: 33;
+  pointer-events: none;
+  background: linear-gradient(to right, rgb(255, 255, 255) 26%, rgba(255, 255, 255, 0.67) 49%, rgba(0, 0, 0, 0) 100%);
+  z-index: 1;
+}
+.testimonial::after {
+  position: absolute;
+  content: "";
+  width: 30%;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  z-index: 33;
+  pointer-events: none;
+  background: linear-gradient(to left, rgb(255, 255, 255) 26%, rgba(255, 255, 255, 0.67) 49%, rgba(0, 0, 0, 0) 100%);
+  z-index: 1;
+}
+
+.call_pop {
+  position: absolute;
+  top: 50px;
+  width: 65%;
+  margin: 0 auto;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9898;
+  background: rgb(255, 255, 255) !important;
+  border-radius: 16px !important;
+  border: 1px solid rgba(255, 255, 255, 0.56) !important;
+  padding: 10px 20px !important;
+  box-shadow: 0px 0px 5px 2px rgba(0, 0, 0, 0.3);
+  backdrop-filter: blur(20px) !important;
+  -webkit-backdrop-filter: blur(20px) !important;
+  background-clip: padding-box;
+  -moz-backdrop-filter: blur(20px);
+}
+.call_pop .user-profile {
+  height: 50px;
+  width: 50px;
+}
+.call_pop .call_btn {
+  width: 50px;
+  height: 50px;
+  border-radius: 50px;
+  color: #fff;
+  padding: 13px !important;
+  border: none;
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+.call_pop .call_btn.answer {
+  background-color: green !important;
+  animation: AcceptCall 0.5s infinite;
+}
+.call_pop .call_btn.answer::before,
+.call_pop .call_btn.answer::after {
+  content: "";
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  border: 1px solid #44bd32;
+  animation: calling 2s ease-in-out infinite;
+}
+.call_pop .call_btn.answer::after {
+  animation: calling 2s ease-in-out 0.35s infinite;
+}
+@keyframes calling {
+  0% {
+    width: 100%;
+    height: 100%;
+    opacity: 1;
+  }
+  100% {
+    width: calc(100% + 60px);
+    height: calc(100% + 60px);
+    opacity: 0;
+  }
+}
+.call_pop .call_btn.end {
+  background-color: red !important;
+}
+
+.video-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-wrap: wrap;
+  margin: 10px 0;
+}
+
+.video-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 0 10px;
+}
+
+.video-box p {
+  margin: 5px 0 0;
+  font-size: 14px;
+  color: #fff;
+}
+
+video {
+  background: #000;
+  border: 2px solid #444;
 }/*# sourceMappingURL=main.css.map */

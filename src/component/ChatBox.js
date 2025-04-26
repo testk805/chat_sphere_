@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from "react";
 import profile from "../assets/images/boy.png";
 import {
   IconPhone,
+  IconPhoneFilled,
   IconListTree,
   IconVideoPlus,
   IconPhotoScan,
@@ -12,8 +13,12 @@ import axios from "axios";
 import { io } from "socket.io-client";
 import Peer from "peerjs";
 
+// Ringtone for both incoming and outgoing calls
+let ring = new Audio("../assets/images/shiv_shama_he_mujme.mp3");
+ring.loop = true;
+
 export default function ChatBox({ selectedFriendId, selectedUserId }) {
-  const apiUrl = " https://chat-sphere-tkbs.onrender.com/api/";
+  const apiUrl = "https://chat-sphere-tkbs.onrender.com/api/";
   const [friendData, setFriendData] = useState(null);
   const socket = useRef(null);
   const [loading, setLoading] = useState(true);
@@ -24,22 +29,80 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [loader, setloader] = useState(false);
   const [sendHide, setsendHide] = useState(true);
-
   const [imagePreview, setImagePreview] = useState(null);
   const [docPreview, setDocPreview] = useState(null);
   const [userEmail, setuserEmail] = useState("");
   const [me, setMe] = useState("");
   const [callAccepted, setCallAccepted] = useState(false);
   const [receivingCall, setReceivingCall] = useState(false);
+  const [outgoingCall, setOutgoingCall] = useState(false);
   const [caller, setCaller] = useState("");
   const [callerSignal, setCallerSignal] = useState(null);
   const [callEnded, setCallEnded] = useState(false);
+  const [CallerName, setCallerName] = useState("");
+  const [CallerProfile, setCallerProfile] = useState("");
+  const [isRinging, setIsRinging] = useState(false);
+  const [callRejected, setCallRejected] = useState(false);
+  const [showCallEnded, setShowCallEnded] = useState(false);
+  const [callStartTime, setCallStartTime] = useState(null);
+  const [callTimer, setCallTimer] = useState("00:00");
   const peerRef = useRef(null);
   const myAudio = useRef();
   const userAudio = useRef();
   const socketRef = useRef();
-
+  const [loginUser, setloginUser] = useState({
+    name: "",
+    email: "",
+    profile: "",
+  });
   const connectionRef = useRef();
+
+  const playRingtone = () => {
+    ring.play().catch((err) => console.error("Error playing ringtone:", err));
+    setIsRinging(true);
+  };
+
+  const stopRingtone = () => {
+    ring.pause();
+    ring.currentTime = 0;
+    setIsRinging(false);
+  };
+
+  const cleanupCall = () => {
+    if (connectionRef.current) {
+      connectionRef.current.close();
+    }
+    setCallAccepted(false);
+    setReceivingCall(false);
+    setOutgoingCall(false);
+    setCallStartTime(null);
+    setCallTimer("00:00");
+    stopRingtone();
+
+    // Clean up audio streams
+    [myAudio.current, userAudio.current].forEach(audio => {
+      if (audio?.srcObject) {
+        audio.srcObject.getTracks().forEach(track => track.stop());
+        audio.srcObject = null;
+      }
+    });
+  };
+
+  useEffect(() => {
+    let timerInterval;
+    if (callAccepted && callStartTime) {
+      timerInterval = setInterval(() => {
+        const now = new Date();
+        const diff = Math.floor((now - callStartTime) / 1000);
+        const minutes = Math.floor(diff / 60)
+          .toString()
+          .padStart(2, "0");
+        const seconds = (diff % 60).toString().padStart(2, "0");
+        setCallTimer(`${minutes}:${seconds}`);
+      }, 1000);
+    }
+    return () => clearInterval(timerInterval);
+  }, [callAccepted, callStartTime]);
 
   useEffect(() => {
     let storedData = localStorage.getItem("userData");
@@ -47,19 +110,17 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
     setuserEmail(parsedData);
   }, []);
 
-
   useEffect(() => {
-    socketRef.current = io("wss://chat-sphere-tkbs.onrender.com/", {
+    socketRef.current = io("ws://localhost:3001/", {
       transports: ["websocket"],
     });
 
     socketRef.current.on("connect", () => {
-      console.log("Connected to server, waiting for ID...");
+      console.log("Connected to server, ID:", socketRef.current.id);
     });
 
     socketRef.current.on("socketId", (id) => {
       console.log("Received socket ID:", id);
-      setMe(id);
     });
 
     socketRef.current.on("connect_error", (err) => {
@@ -72,13 +133,18 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
     peer.on("open", (id) => {
       console.log("My Peer ID:", id);
       setMe(id);
+      socketRef.current.emit("setPeerId", id);
     });
 
     peer.on("call", (call) => {
       console.log("📞 Incoming call from:", call.peer);
+      console.log("🧑 Caller Info:", call.metadata?.callerInfo);
+      setCallerName(call.metadata?.callerInfo.name);
+      setCallerProfile(call.metadata?.callerInfo.profile);
       setReceivingCall(true);
       setCaller(call.peer);
       setCallerSignal(call);
+      playRingtone();
     });
 
     socketRef.current.on("callIncoming", (data) => {
@@ -86,22 +152,82 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
       setReceivingCall(true);
       setCaller(data.from);
       setCallerSignal(data.signal);
+      playRingtone();
     });
 
     socketRef.current.on("callAccepted", (signal) => {
       if (connectionRef.current) {
         connectionRef.current.signal(signal);
         setCallAccepted(true);
+        setCallStartTime(new Date());
+        stopRingtone();
+      }
+    });
+
+    socketRef.current.on("callRejected", () => {
+      console.log("❌ Call rejected by receiver");
+      setCallRejected(true);
+      setOutgoingCall(false);
+      stopRingtone();
+      setTimeout(() => setCallRejected(false), 3000);
+    });
+
+    socketRef.current.on("callCancelled", () => {
+      setReceivingCall(false);
+      stopRingtone();
+    });
+
+    socketRef.current.on("endCall", () => {
+      if (connectionRef.current) {
+        connectionRef.current.close();
+      }
+      cleanupCall();
+      setShowCallEnded(true);
+      setTimeout(() => setShowCallEnded(false), 3000);
+      setCallAccepted(false);
+      setReceivingCall(false);
+      setOutgoingCall(false);
+      setCallStartTime(null);
+      setCallTimer("00:00");
+      stopRingtone();
+      if (myAudio.current?.srcObject) {
+        myAudio.current.srcObject.getTracks().forEach((track) => track.stop());
+      }
+      if (userAudio.current?.srcObject) {
+        userAudio.current.srcObject.getTracks().forEach((track) => track.stop());
       }
     });
 
     return () => {
       if (peerRef.current) peerRef.current.destroy();
-      if (socketRef.current) socketRef.current.disconnect(); // ✅ Fix: Use socketRef
+      if (socketRef.current) socketRef.current.disconnect();
+      stopRingtone();
     };
   }, []);
 
-  const callUser = (id) => {
+  useEffect(() => {
+    if (userEmail) {
+      fetchUserData();
+    }
+  }, [userEmail]);
+
+  const fetchUserData = async () => {
+    try {
+      const response = await axios.post(apiUrl + "fetchuserdata", {
+        userEmail,
+      });
+      const user = response.data.data[0];
+      setloginUser({
+        name: user.name,
+        email: user.email,
+        profile: user.image,
+      });
+    } catch (error) {
+      console.log(error);
+    }
+  };
+
+  const callUser = (id, name, profile) => {
     navigator.mediaDevices.enumerateDevices().then((devices) => {
       const hasMic = devices.some((device) => device.kind === "audioinput");
       const constraints = hasMic ? { audio: true } : {};
@@ -114,15 +240,39 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
           }
 
           console.log("🔗 Calling:", id);
-          const call = peerRef.current.call(id, stream);
+          setOutgoingCall(true);
+          playRingtone();
+
+          const call = peerRef.current.call(id, stream, {
+            metadata: {
+              callerInfo: {
+                name: loginUser.name,
+                profile: loginUser.profile,
+                peerId: id,
+              },
+            },
+          });
 
           call.on("stream", (userStream) => {
             userAudio.current.srcObject = userStream;
+            setCallAccepted(true);
+            setOutgoingCall(false);
+            setCallStartTime(new Date());
+            stopRingtone();
           });
 
-          socket.emit("callUser", {
+          call.on("close", () => {
+            setCallEnded(true);
+            setOutgoingCall(false);
+            setCallAccepted(false);
+            setCallStartTime(null);
+            setCallTimer("00:00");
+            stopRingtone();
+          });
+
+          socketRef.current.emit("callUser", {
             userToCall: id,
-            signalData: call.peer, // ✅ Fix: Use call.peer instead of call.signal
+            signalData: call,
             from: me,
           });
 
@@ -140,24 +290,55 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
       .then((stream) => {
         setCallAccepted(true);
         userAudio.current.srcObject = stream;
+        setCallStartTime(new Date());
+        stopRingtone();
 
         console.log("✅ Answering call...");
-        callerSignal.answer(stream); // ✅ Fix: Properly answer the call
+        callerSignal.answer(stream);
 
         callerSignal.on("stream", (userStream) => {
           myAudio.current.srcObject = userStream;
         });
 
-        socket.emit("answerCall", {
+        socketRef.current.emit("answerCall", {
           signal: callerSignal,
           to: caller,
         });
 
+        setReceivingCall(false);
         connectionRef.current = callerSignal;
       })
       .catch((err) => {
         console.error("❌ Audio device error:", err);
       });
+  };
+
+  const rejectCall = () => {
+    console.log("Rejecting call, sending to:", caller);
+    socketRef.current.emit("rejectCall", { to: caller });
+    setReceivingCall(false);
+    stopRingtone();
+  };
+
+  const cancelCall = () => {
+    if (connectionRef.current) {
+      connectionRef.current.close();
+    }
+    setOutgoingCall(false);
+    setCallAccepted(false);
+    setReceivingCall(false);
+    setCallStartTime(null);
+    setCallTimer("00:00");
+    stopRingtone();
+    if (myAudio.current?.srcObject) {
+      myAudio.current.srcObject.getTracks().forEach((track) => track.stop());
+    }
+    if (userAudio.current?.srcObject) {
+      userAudio.current.srcObject.getTracks().forEach((track) => track.stop());
+    }
+    socketRef.current.emit(callAccepted ? "endCall" : "cancelCall", {
+      to: callAccepted ? caller || friendData.peer_ID : friendData.peer_ID,
+    });
   };
 
   useEffect(() => {
@@ -172,9 +353,8 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
         value,
         userEmail,
       });
-      // console.log(response.data);
     } catch (error) {
-      return console.log(error);
+      console.log(error);
     }
   };
 
@@ -186,28 +366,25 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
     }
   };
 
-  // Handle Document Selection
   const handleDocChange = (event) => {
     const file = event.target.files[0];
     if (file) {
-      setDocPreview(file.name); // Store only the file name for preview
+      setDocPreview(file.name);
     }
   };
 
-  // Remove Image
   const removeImage = () => {
     setImagePreview(null);
     document.getElementById("fileInput").value = "";
   };
 
-  // Remove Document
   const removeDoc = () => {
     setDocPreview(null);
     document.getElementById("filedoc").value = "";
   };
 
   useEffect(() => {
-    socket.current = io("wss://chat-sphere-tkbs.onrender.com", { transports: ["websocket"] });
+    socket.current = io("ws://localhost:3001", { transports: ["websocket"] });
 
     if (selectedUserId) {
       socket.current.emit("userOnline", selectedUserId);
@@ -220,20 +397,12 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
     });
 
     socket.current.on("refreshData", (data) => {
-      console.log("🔄 Refreshing API data...", data);
-
-      if (!data || !data.senderId || !data.receiverId) {
-        console.error("❌ Invalid refreshData event received:", data);
-        return;
-      }
-
       if (
         (data.senderId === selectedFriendId &&
           data.receiverId === selectedUserId) ||
         (data.senderId === selectedUserId &&
           data.receiverId === selectedFriendId)
       ) {
-        console.log("✅ Refreshing data for selected chat...");
         getUserChat();
       }
     });
@@ -252,10 +421,13 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
       }
     });
 
-    // 🟢 Listen for Online Users
     socket.current.on("updateOnlineUsers", (users) => {
-      console.log("🟢 Online Users:", users);
       setOnlineUsers(users);
+    });
+
+    socket.current.on("callCancelled", () => {
+      setReceivingCall(false);
+      stopRingtone();
     });
 
     return () => {
@@ -264,6 +436,7 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
       socket.current.off("typing");
       socket.current.off("stopTyping");
       socket.current.off("updateOnlineUsers");
+      socket.current.off("callCancelled");
       socket.current.disconnect();
     };
   }, [selectedFriendId, selectedUserId]);
@@ -292,7 +465,7 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
       });
       setusermessage(response.data.data);
     } catch (error) {
-      return console.log(error);
+      console.log(error);
     }
   };
 
@@ -302,7 +475,7 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
       const response = await axios.post(apiUrl + "getfriendchat", {
         id: selectedFriendId,
       });
-      setFriendData(response.data.data || {}); // Ensure it’s an object
+      setFriendData(response.data.data || {});
     } catch (error) {
       console.log(error);
       setFriendData(null);
@@ -310,10 +483,140 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
     setLoading(false);
   };
 
+  const renderCallPopups = () => {
+    if (!friendData) return null;
+
+    return (
+      <>
+        {outgoingCall && !callAccepted && !callRejected && (
+          <div className="call_pop d-flex align-items-center gap-4 justify-content-between">
+            <div className="d-flex align-items-center gap-3">
+              <div className="d-block flex-shrink-0 user-profile">
+                <img
+                  className="h-100 rounded-5 w-100"
+                  alt="profile"
+                  src={friendData.image ? `https://chat-sphere-tkbs.onrender.com${friendData.image}` : profile}
+                  onError={(e) => (e.target.src = profile)}
+                />
+              </div>
+              <div className="d-flex flex-column gap-0">
+                <h4>{friendData.name || "Calling..."}</h4>
+                <p className="
+                
+                
+                text-success">Calling...</p>
+              </div>
+            </div>
+            <div className="d-flex align-items-center gap-3">
+              <button onClick={cancelCall} className="call_btn end">
+                <img
+                  className="w-100 h-100"
+                  src={require("../assets/images/no-call.png")}
+                  alt="Cancel Call"
+                />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {receivingCall && !callAccepted && !callRejected && (
+          <div className="call_pop d-flex align-items-center gap-4 justify-content-between">
+            <div className="d-flex align-items-center gap-3">
+              <div className="d-block flex-shrink-0 user-profile">
+                <img
+                  className="h-100 rounded-5 w-100"
+                  alt="profile"
+                  src={CallerProfile ? `https://chat-sphere-tkbs.onrender.com${CallerProfile}` : profile}
+                  onError={(e) => (e.target.src = profile)}
+                />
+              </div>
+              <div className="d-flex flex-column gap-0">
+                <h4>{CallerName || "Unknown Caller"}</h4>
+                <p className="text-success">Incoming Call...</p>
+              </div>
+            </div>
+            <div className="d-flex align-items-center gap-3">
+              <button onClick={answerCall} className="call_btn answer">
+                <img
+                  className="w-100 h-100"
+                  src={require("../assets/images/call.png")}
+                  alt="Answer"
+                />
+              </button>
+              <button onClick={rejectCall} className="call_btn end">
+                <img
+                  className="w-100 h-100"
+                  src={require("../assets/images/no-call.png")}
+                  alt="Reject"
+                />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {callAccepted && !callRejected && (
+          <div className="call_pop d-flex align-items-center gap-4 justify-content-between">
+            <div className="d-flex align-items-center gap-3">
+              <div className="d-block flex-shrink-0 user-profile">
+                <img
+                  className="h-100 rounded-5 w-100"
+                  alt="profile"
+                  src={friendData.image ? `https://chat-sphere-tkbs.onrender.com${friendData.image}` : profile}
+                  onError={(e) => (e.target.src = profile)}
+                />
+              </div>
+              <div className="d-flex flex-column gap-0">
+                <h4>{friendData.name || "In Call"}</h4>
+                <p className="text-success">Call in Progress: {callTimer}</p>
+              </div>
+            </div>
+            <div className="d-flex align-items-center gap-3">
+              <button onClick={cancelCall} className="call_btn end">
+                <img
+                  className="w-100 h-100"
+                  src={require("../assets/images/no-call.png")}
+                  alt="End Call"
+                />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {callRejected && (
+          <div className="call_pop d-flex align-items-center gap-4 justify-content-between">
+            <div className="d-flex align-items-center gap-3">
+              <div className="d-flex flex-column gap-0">
+                <h4>Call Rejected</h4>
+                <p className="text-danger">
+                  {friendData?.name || "User"} rejected your call.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showCallEnded && (
+          <div className="call_pop d-flex align-items-center gap-4 justify-content-between">
+            <div className="d-flex align-items-center gap-3">
+              <div className="d-flex flex-column gap-0">
+                <h4>Call Ended</h4>
+                <p className="text-muted">
+                  Your call with {friendData?.name || "User"} has ended.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+      </>
+    );
+  };
+
+
   if (loading) {
     return (
-      <div className="d-flex align-items-center h-100vh justify-content-center">
+      <div className="d-flex align-items-center h-100vh justify-content-center chat_box">
         <h1 className="text-center">Welcome to Chat Sphere.</h1>
+        {renderCallPopups()}
       </div>
     );
   }
@@ -336,20 +639,20 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
     setsendHide(false);
     setImagePreview(false);
     const formData = new FormData();
-    formData.append("sender_id", selectedUserId); // Replace with actual sender ID
-    formData.append("reciver_id", selectedFriendId); // Replace with actual receiver ID
+    formData.append("sender_id", selectedUserId);
+    formData.append("reciver_id", selectedFriendId);
     formData.append("message", e.target.send_message.value.trim());
-    formData.append("status", "sent"); // Default status
+    formData.append("status", "sent");
 
     const mediaFile = e.target.fileInput.files[0];
     const docFile = e.target.filedoc.files[0];
 
     if (mediaFile) {
       formData.append("file", mediaFile);
-      formData.append("file_type", mediaFile.type); // Fix: Send MIME type
+      formData.append("file_type", mediaFile.type);
     } else if (docFile) {
       formData.append("file", docFile);
-      formData.append("file_type", docFile.type); // Fix: Send MIME type
+      formData.append("file_type", docFile.type);
     } else {
       formData.append("file_type", "text");
     }
@@ -366,7 +669,6 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
       });
 
       const result = await response.json();
-      console.log(result);
       if (result.status === 1) {
         socket.current.emit("sendMessage", {
           senderId: selectedUserId,
@@ -407,8 +709,8 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
                 <img
                   className="h-100 rounded-5 w-100"
                   alt="profile"
-                  src={` https://chat-sphere-tkbs.onrender.com${friendData.image}`}
-                  onError={(e) => (e.target.src = `${friendData.image}`)} // Fallback if image is missing
+                  src={`https://chat-sphere-tkbs.onrender.com${friendData.image}`}
+                  onError={(e) => (e.target.src = `${friendData.image}`)}
                 />
               </div>
               <div>
@@ -436,14 +738,14 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
                 controls
                 style={{ display: "none" }}
               />
-              <button onClick={() => callUser(friendData.peer_ID)}>
+              <button
+                onClick={() =>
+                  callUser(friendData.peer_ID, friendData.name, friendData.image)
+                }
+                disabled={outgoingCall || receivingCall || callAccepted}
+              >
                 <IconPhone stroke={2} /> Call
               </button>
-              {receivingCall && (
-                <button onClick={answerCall}>Answer Call</button>
-              )}
-              <audio ref={myAudio} autoPlay />
-              <audio ref={userAudio} autoPlay />
               <button>
                 <IconVideoPlus stroke={2} />
               </button>
@@ -452,6 +754,9 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
               </button>
             </div>
           </div>
+
+          {renderCallPopups()}
+
           <div className="d-flex flex-column gap-3 main_chat px-4">
             <ul className="d-flex flex-column list-unstyled gap-2 pe-2">
               {usermessage.map((message, index) => (
@@ -469,55 +774,48 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
                       : "sent"
                       }`}
                   >
-                    {/* Text Message */}
-                    {message.message && (
-                      <p className="px-2">{message.message}</p>
-                    )}
-
-                    {/* Image File */}
+                    {message.message && <p className="px-2">{message.message}</p>}
                     {message.file_type?.startsWith("image/") && (
                       <img
-                        src={` https://chat-sphere-tkbs.onrender.com/${message.file_url}`}
+                        src={`https://chat-sphere-tkbs.onrender.com/${message.file_url}`}
                         alt="sent-img"
                         className="chat-image"
                         style={{ maxWidth: "200px", borderRadius: "8px" }}
                       />
                     )}
-
-                    {/* Video File */}
                     {message.file_type?.startsWith("video/") && (
                       <video controls width="200">
                         <source
-                          src={` https://chat-sphere-tkbs.onrender.com/${message.file_url}`}
+                          src={`https://chat-sphere-tkbs.onrender.com/${message.file_url}`}
                           type={message.file_type}
                         />
                         Your browser does not support videos.
                       </video>
                     )}
-
-                    {/* Audio File */}
                     {message.file_type?.startsWith("audio/") && (
                       <audio controls>
                         <source
-                          src={` https://chat-sphere-tkbs.onrender.com/${message.file_url}`}
+                          src={`https://chat-sphere-tkbs.onrender.com/${message.file_url}`}
                           type={message.file_type}
                         />
                         Your browser does not support audio playback.
                       </audio>
                     )}
-
-                    {/* Document File (PDF, DOCX, TXT, etc.) */}
-                    {["application/pdf", "application/msword", "application/vnd.openxmlformats-officedocument.wordprocessingml.document", "text/plain"].includes(message.file_type) && (
-                      <a
-                        href={`https://chat-sphere-tkbs.onrender.com/${message.file_url}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="btn btn-outline-primary mt-2"
-                      >
-                        📄 View Document
-                      </a>
-                    )}
-
+                    {[
+                      "application/pdf",
+                      "application/msword",
+                      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                      "text/plain",
+                    ].includes(message.file_type) && (
+                        <a
+                          href={`https://chat-sphere-tkbs.onrender.com/${message.file_url}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="btn btn-outline-primary mt-2"
+                        >
+                          📄 View Document
+                        </a>
+                      )}
                   </div>
                 </li>
               ))}
@@ -536,7 +834,6 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
                 accept="image/*, video/*, audio/*"
                 onChange={handleImageChange}
               />
-              {/* Document Preview */}
               {docPreview && (
                 <div className="preview-container py-4">
                   <span className="text-white py-4 word">{docPreview}</span>
@@ -589,13 +886,10 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
               <div className="position-relative" style={{ height: "40px" }}>
                 {loader && (
                   <div className="main_loader">
-                    <div class="loader"></div>
+                    <div className="loader"></div>
                   </div>
                 )}
-
-                <button type="submit">
-                  {sendHide && <IconBrandTelegram />}
-                </button>
+                <button type="submit">{sendHide && <IconBrandTelegram />}</button>
               </div>
             </form>
           </div>
