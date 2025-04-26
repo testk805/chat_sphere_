@@ -843,7 +843,7 @@ export default function Login() {
                       />
                       <div className="d-flex flex-column gap-2">
                         <div className="d-flex align-items-center gap-0 new_account">
-                          <span>You already in Chat Sphere?</span>
+                          <span>You already in Chat Sphere ?</span>
 
                           <button type="button" onClick={SignAccount}>
                             Sign In
