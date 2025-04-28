@@ -617,7 +617,127 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
     return (
       <div className="d-flex align-items-center h-100vh justify-content-center chat_box">
         <h1 className="text-center">Welcome to Chat Sphere.</h1>
-        {renderCallPopups()}
+         <>
+        {outgoingCall && !callAccepted && !callRejected && (
+          <div className="call_pop d-flex align-items-center gap-4 justify-content-between">
+            <div className="d-flex align-items-center gap-3">
+              <div className="d-block flex-shrink-0 user-profile">
+                <img
+                  className="h-100 rounded-5 w-100"
+                  alt="profile"
+                  src={friendData.image ? `https://chat-sphere-tkbs.onrender.com${friendData.image}` : profile}
+                  onError={(e) => (e.target.src = profile)}
+                />
+              </div>
+              <div className="d-flex flex-column gap-0">
+                <h4>{friendData.name || "Calling..."}</h4>
+                <p className="
+                
+                
+                text-success">Calling...</p>
+              </div>
+            </div>
+            <div className="d-flex align-items-center gap-3">
+              <button onClick={cancelCall} className="call_btn end">
+                <img
+                  className="w-100 h-100"
+                  src={require("../assets/images/no-call.png")}
+                  alt="Cancel Call"
+                />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {receivingCall && !callAccepted && !callRejected && (
+          <div className="call_pop d-flex align-items-center gap-4 justify-content-between">
+            <div className="d-flex align-items-center gap-3">
+              <div className="d-block flex-shrink-0 user-profile">
+                <img
+                  className="h-100 rounded-5 w-100"
+                  alt="profile"
+                  src={CallerProfile ? `https://chat-sphere-tkbs.onrender.com${CallerProfile}` : profile}
+                  onError={(e) => (e.target.src = profile)}
+                />
+              </div>
+              <div className="d-flex flex-column gap-0">
+                <h4>{CallerName || "Unknown Caller"}</h4>
+                <p className="text-success">Incoming Call...</p>
+              </div>
+            </div>
+            <div className="d-flex align-items-center gap-3">
+              <button onClick={answerCall} className="call_btn answer">
+                <img
+                  className="w-100 h-100"
+                  src={require("../assets/images/call.png")}
+                  alt="Answer"
+                />
+              </button>
+              <button onClick={rejectCall} className="call_btn end">
+                <img
+                  className="w-100 h-100"
+                  src={require("../assets/images/no-call.png")}
+                  alt="Reject"
+                />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {callAccepted && !callRejected && (
+          <div className="call_pop d-flex align-items-center gap-4 justify-content-between">
+            <div className="d-flex align-items-center gap-3">
+              <div className="d-block flex-shrink-0 user-profile">
+                <img
+                  className="h-100 rounded-5 w-100"
+                  alt="profile"
+                  src={friendData.image ? `https://chat-sphere-tkbs.onrender.com${friendData.image}` : profile}
+                  onError={(e) => (e.target.src = profile)}
+                />
+              </div>
+              <div className="d-flex flex-column gap-0">
+                <h4>{friendData.name || "In Call"}</h4>
+                <p className="text-success">Call in Progress: {callTimer}</p>
+              </div>
+            </div>
+            <div className="d-flex align-items-center gap-3">
+              <button onClick={cancelCall} className="call_btn end">
+                <img
+                  className="w-100 h-100"
+                  src={require("../assets/images/no-call.png")}
+                  alt="End Call"
+                />
+              </button>
+            </div>
+          </div>
+        )}
+
+        {callRejected && (
+          <div className="call_pop d-flex align-items-center gap-4 justify-content-between">
+            <div className="d-flex align-items-center gap-3">
+              <div className="d-flex flex-column gap-0">
+                <h4>Call Rejected</h4>
+                <p className="text-danger">
+                  {friendData?.name || "User"} rejected your call.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {showCallEnded && (
+          <div className="call_pop d-flex align-items-center gap-4 justify-content-between">
+            <div className="d-flex align-items-center gap-3">
+              <div className="d-flex flex-column gap-0">
+                <h4>Call Ended</h4>
+                <p className="text-muted">
+                  Your call with {friendData?.name || "User"} has ended.
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+      </>
       </div>
     );
   }
