@@ -111,7 +111,7 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
   }, []);
 
   useEffect(() => {
-    socketRef.current = io("ws://localhost:3001/", {
+    socketRef.current = io("wss://chat-sphere-tkbs.onrender.com/", {
       transports: ["websocket"],
     });
 
@@ -384,7 +384,7 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
   };
 
   useEffect(() => {
-    socket.current = io("ws://localhost:3001", { transports: ["websocket"] });
+    socket.current = io("wss://chat-sphere-tkbs.onrender.com", { transports: ["websocket"] });
 
     if (selectedUserId) {
       socket.current.emit("userOnline", selectedUserId);
@@ -819,7 +819,7 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
                   </div>
                 </li>
               ))}
-              <div ref={messagesEndRef} /> 
+              <div ref={messagesEndRef} />
             </ul>
 
             <form
