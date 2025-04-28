@@ -14,7 +14,8 @@ import { io } from "socket.io-client";
 import Peer from "peerjs";
 
 // Ringtone for both incoming and outgoing calls
-let ring = new Audio("/assets/images/shiv_shama_he_mujme.mp3");
+import ringtone from "../assets/images/shiv_shama_he_mujme.mp3";
+let ring = new Audio(ringtone);
 ring.loop = true;
 
 export default function ChatBox({ selectedFriendId, selectedUserId }) {
