@@ -51,6 +51,19 @@ function SideBar({ setSelectedFriendId, setSelectedUserId }) {
     }
   }, [userEmail, long, lat]);
 
+  useEffect(() => {
+    Updatelastlogin();
+  }, [userEmail])
+
+  const Updatelastlogin = async () => {
+    try {
+      const response = await axios.post(apiUrl + "Updatelastlogin", { userEmail });
+      console.log(response.data);
+    } catch (error) {
+      console.log(error);
+    }
+  }
+
   const fetchUserData = async () => {
     try {
       const response = await axios.post(apiUrl + "fetchuserdata", {
@@ -126,6 +139,7 @@ function SideBar({ setSelectedFriendId, setSelectedUserId }) {
   const handlefriend = (id) => {
     setSelectedFriendId(id);
     setActiveFriend(id);
+    Updatelastlogin();
   };
   const [openmenu, setopenmenu] = useState(false);
   const openNav = () => {

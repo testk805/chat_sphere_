@@ -647,7 +647,7 @@ body {
   .main_chat {
     height: 81vh;
 
-    ul {
+    .main_ul {
       height: 70vh;
       overflow: auto;
       -ms-overflow-style: none;
@@ -663,7 +663,11 @@ body {
       position: relative;
       word-wrap: break-word;
     }
-
+    .right_mess {
+      display: flex;
+      justify-content: end;
+      align-items: end;
+    }
     .received {
       background: #f1f1f1;
       color: #333;
@@ -691,6 +695,7 @@ body {
       width: 0;
       height: 0;
       border-style: solid;
+      transform: rotate(90deg);
     }
 
     .received::after {
@@ -700,7 +705,7 @@ body {
     }
 
     .sent::after {
-      right: -8px;
+      right: -2px;
       border-width: 8px 0 0 8px;
       border-color: #007bff transparent transparent transparent;
     }
@@ -1140,4 +1145,122 @@ body {
 video {
   background: #000;
   border: 2px solid #444;
+}
+.message_delete {
+  .delete_dot_btn {
+    background-color: transparent;
+    border: none;
+    width: fit-content;
+    padding: 0;
+  }
+  .delete_dot_btn svg {
+    transform: rotate(90deg);
+  }
+}
+
+// Variables for consistent theming
+$primary-color: #007bff; // Vibrant blue for accents
+$background-color: rgba(18, 18, 18, 0.85); // Dark semi-transparent background
+$hover-bg-color: rgba(255, 255, 255, 0.15); // Light hover effect
+$text-color: #e0e0e0; // Light gray for text
+$active-text-color: #ffffff; // Bright white for active states
+$border-color: rgba(255, 255, 255, 0.1); // Subtle border
+$shadow-color: rgba(0, 0, 0, 0.3);
+$blur-radius: 12px;
+
+// Dropdown container
+.dropdown-menu_ull {
+  position: absolute;
+  top: 0px; // Adjusted for better spacing
+  right: 20px;
+  display: flex;
+  flex-direction: column;
+  background: $background-color;
+  box-shadow: 0 8px 32px $shadow-color;
+  backdrop-filter: blur($blur-radius);
+  -webkit-backdrop-filter: blur($blur-radius);
+  border-radius: 12px; // Rounded corners for modern look
+  border: 1px solid $border-color;
+  z-index: 9999; // Higher z-index for overlay
+  overflow: hidden; // Prevent content overflow
+  animation: slideIn 0.3s ease-out; // Smooth entrance animation
+
+  // Entrance animation
+  @keyframes slideIn {
+    from {
+      opacity: 0;
+      transform: translateY(-10px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+
+  // List items
+  li {
+    border-bottom: 1px solid $border-color;
+    transition: background-color 0.2s ease; // Smooth background transition
+
+    &:last-child {
+      border-bottom: none; // Remove border for last item
+    }
+
+    // Button styles
+    button {
+      padding: 9px 25px; // More padding for touch-friendly interaction
+      border: none;
+      background: transparent;
+      color: $text-color;
+      width: 100%;
+      text-align: center; // Align text to left for better readability
+      font-size: 14px; // Clean font size
+      font-weight: 500; // Medium weight for professionalism
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 10px; // Space for icons
+      cursor: pointer;
+      transition: all 0.2s ease; // Smooth transitions for hover
+
+      // Optional icon styling
+      .icon {
+        font-size: 18px;
+        color: $text-color;
+        transition: color 0.2s ease;
+      }
+
+      &:hover {
+        background: $hover-bg-color;
+        color: $active-text-color;
+        .icon {
+          color: $primary-color; // Accent color on hover
+        }
+      }
+
+      &:active {
+        background: rgba($primary-color, 0.2); // Feedback on click
+      }
+    }
+  }
+
+  // Optional: Add a subtle gradient overlay for depth
+  &::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.05), rgba(0, 0, 0, 0.05));
+    z-index: -1;
+  }
+}
+
+// Responsive adjustments
+@media (max-width: 768px) {
+  .dropdown-menu_ull {
+    right: 10px;
+    top: 15px;
+  }
 }

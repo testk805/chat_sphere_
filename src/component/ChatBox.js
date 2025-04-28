@@ -2,7 +2,7 @@ import React, { useEffect, useState, useRef } from "react";
 import profile from "../assets/images/boy.png";
 import {
   IconPhone,
-  IconPhoneFilled,
+  IconLineDashed,
   IconListTree,
   IconVideoPlus,
   IconPhotoScan,
@@ -12,9 +12,8 @@ import {
 import axios from "axios";
 import { io } from "socket.io-client";
 import Peer from "peerjs";
-
-// Ringtone for both incoming and outgoing calls
 import ringtone from "../assets/images/shiv_shama_he_mujme.mp3";
+
 let ring = new Audio(ringtone);
 ring.loop = true;
 
@@ -41,15 +40,19 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
   const [callerSignal, setCallerSignal] = useState(null);
   const [callEnded, setCallEnded] = useState(false);
   const [CallerName, setCallerName] = useState("");
+  const [openUlIndex, setOpenUlIndex] = useState(null);
   const [CallerProfile, setCallerProfile] = useState("");
   const [isRinging, setIsRinging] = useState(false);
   const [callRejected, setCallRejected] = useState(false);
   const [showCallEnded, setShowCallEnded] = useState(false);
   const [callStartTime, setCallStartTime] = useState(null);
   const [callTimer, setCallTimer] = useState("00:00");
+  const [isVideoCall, setIsVideoCall] = useState(false); // Track video call
   const peerRef = useRef(null);
   const myAudio = useRef();
   const userAudio = useRef();
+  const myVideo = useRef(); // Video ref for local stream
+  const userVideo = useRef(); // Video ref for remote stream
   const socketRef = useRef();
   const [loginUser, setloginUser] = useState({
     name: "",
@@ -59,6 +62,7 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
   const connectionRef = useRef();
 
   const playRingtone = () => {
+    ring.load();
     ring.play().catch((err) => console.error("Error playing ringtone:", err));
     setIsRinging(true);
   };
@@ -76,15 +80,15 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
     setCallAccepted(false);
     setReceivingCall(false);
     setOutgoingCall(false);
+    setIsVideoCall(false);
     setCallStartTime(null);
     setCallTimer("00:00");
     stopRingtone();
 
-    // Clean up audio streams
-    [myAudio.current, userAudio.current].forEach(audio => {
-      if (audio?.srcObject) {
-        audio.srcObject.getTracks().forEach(track => track.stop());
-        audio.srcObject = null;
+    [myAudio.current, userAudio.current, myVideo.current, userVideo.current].forEach((media) => {
+      if (media?.srcObject) {
+        media.srcObject.getTracks().forEach((track) => track.stop());
+        media.srcObject = null;
       }
     });
   };
@@ -95,9 +99,7 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
       timerInterval = setInterval(() => {
         const now = new Date();
         const diff = Math.floor((now - callStartTime) / 1000);
-        const minutes = Math.floor(diff / 60)
-          .toString()
-          .padStart(2, "0");
+        const minutes = Math.floor(diff / 60).toString().padStart(2, "0");
         const seconds = (diff % 60).toString().padStart(2, "0");
         setCallTimer(`${minutes}:${seconds}`);
       }, 1000);
@@ -145,14 +147,7 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
       setReceivingCall(true);
       setCaller(call.peer);
       setCallerSignal(call);
-      playRingtone();
-    });
-
-    socketRef.current.on("callIncoming", (data) => {
-      console.log(`📞 Incoming call from ${data.from}`);
-      setReceivingCall(true);
-      setCaller(data.from);
-      setCallerSignal(data.signal);
+      setIsVideoCall(!!call.metadata?.isVideo); // Check if video call
       playRingtone();
     });
 
@@ -179,24 +174,9 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
     });
 
     socketRef.current.on("endCall", () => {
-      if (connectionRef.current) {
-        connectionRef.current.close();
-      }
       cleanupCall();
       setShowCallEnded(true);
       setTimeout(() => setShowCallEnded(false), 3000);
-      setCallAccepted(false);
-      setReceivingCall(false);
-      setOutgoingCall(false);
-      setCallStartTime(null);
-      setCallTimer("00:00");
-      stopRingtone();
-      if (myAudio.current?.srcObject) {
-        myAudio.current.srcObject.getTracks().forEach((track) => track.stop());
-      }
-      if (userAudio.current?.srcObject) {
-        userAudio.current.srcObject.getTracks().forEach((track) => track.stop());
-      }
     });
 
     return () => {
@@ -211,6 +191,20 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
       fetchUserData();
     }
   }, [userEmail]);
+
+  const handledeleteMessage = async (id, type, file_url) => {
+
+    try {
+      const response = await axios.post(apiUrl + "handledeleteMessage", { id, type, file_url });
+      console.log(response.data);
+      if (response.data.status === 1) {
+        getUserChat();
+      }
+    } catch (error) {
+      return console.log(error);
+    }
+  }
+
 
   const fetchUserData = async () => {
     try {
@@ -228,7 +222,7 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
     }
   };
 
-  const callUser = (id, name, profile) => {
+  const callUser = (id) => {
     navigator.mediaDevices.enumerateDevices().then((devices) => {
       const hasMic = devices.some((device) => device.kind === "audioinput");
       const constraints = hasMic ? { audio: true } : {};
@@ -250,6 +244,7 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
                 name: loginUser.name,
                 profile: loginUser.profile,
                 peerId: id,
+                isVideo: false, // Audio call
               },
             },
           });
@@ -273,7 +268,7 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
 
           socketRef.current.emit("callUser", {
             userToCall: id,
-            signalData: call,
+            signalData: { peerId: call.peer },
             from: me,
           });
 
@@ -285,12 +280,73 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
     });
   };
 
-  const answerCall = () => {
+  const startVideoCall = (id) => {
     navigator.mediaDevices
-      .getUserMedia({ audio: true })
+      .getUserMedia({
+        video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+        audio: true,
+      })
+      .then((stream) => {
+        myVideo.current.srcObject = stream;
+        console.log("🔗 Starting video call to:", id);
+        setOutgoingCall(true);
+        setIsVideoCall(true);
+        playRingtone();
+
+        const call = peerRef.current.call(id, stream, {
+          metadata: {
+            callerInfo: {
+              name: loginUser.name,
+              profile: loginUser.profile,
+              peerId: id,
+              isVideo: true, // Video call
+            },
+          },
+        });
+
+        call.on("stream", (userStream) => {
+          userVideo.current.srcObject = userStream;
+          setCallAccepted(true);
+          setOutgoingCall(false);
+          setCallStartTime(new Date());
+          stopRingtone();
+        });
+
+        call.on("close", () => {
+          setCallEnded(true);
+          setCallAccepted(false);
+          setOutgoingCall(false);
+          setIsVideoCall(false);
+          stopRingtone();
+        });
+
+        socketRef.current.emit("callUser", {
+          userToCall: id,
+          signalData: { peerId: call.peer },
+          from: me,
+        });
+
+        connectionRef.current = call;
+      })
+      .catch((err) => {
+        console.error("❌ Error accessing media devices:", err);
+      });
+  };
+
+  const answerCall = () => {
+    const constraints = isVideoCall
+      ? { video: { width: { ideal: 1280 }, height: { ideal: 720 } }, audio: true }
+      : { audio: true };
+
+    navigator.mediaDevices
+      .getUserMedia(constraints)
       .then((stream) => {
         setCallAccepted(true);
-        userAudio.current.srcObject = stream;
+        if (isVideoCall) {
+          myVideo.current.srcObject = stream;
+        } else {
+          userAudio.current.srcObject = stream;
+        }
         setCallStartTime(new Date());
         stopRingtone();
 
@@ -298,7 +354,11 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
         callerSignal.answer(stream);
 
         callerSignal.on("stream", (userStream) => {
-          myAudio.current.srcObject = userStream;
+          if (isVideoCall) {
+            userVideo.current.srcObject = userStream;
+          } else {
+            myAudio.current.srcObject = userStream;
+          }
         });
 
         socketRef.current.emit("answerCall", {
@@ -310,7 +370,7 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
         connectionRef.current = callerSignal;
       })
       .catch((err) => {
-        console.error("❌ Audio device error:", err);
+        console.error("❌ Media device error:", err);
       });
   };
 
@@ -328,15 +388,15 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
     setOutgoingCall(false);
     setCallAccepted(false);
     setReceivingCall(false);
+    setIsVideoCall(false);
     setCallStartTime(null);
     setCallTimer("00:00");
     stopRingtone();
-    if (myAudio.current?.srcObject) {
-      myAudio.current.srcObject.getTracks().forEach((track) => track.stop());
-    }
-    if (userAudio.current?.srcObject) {
-      userAudio.current.srcObject.getTracks().forEach((track) => track.stop());
-    }
+    [myAudio.current, userAudio.current, myVideo.current, userVideo.current].forEach((media) => {
+      if (media?.srcObject) {
+        media.srcObject.getTracks().forEach((track) => track.stop());
+      }
+    });
     socketRef.current.emit(callAccepted ? "endCall" : "cancelCall", {
       to: callAccepted ? caller || friendData.peer_ID : friendData.peer_ID,
     });
@@ -399,10 +459,8 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
 
     socket.current.on("refreshData", (data) => {
       if (
-        (data.senderId === selectedFriendId &&
-          data.receiverId === selectedUserId) ||
-        (data.senderId === selectedUserId &&
-          data.receiverId === selectedFriendId)
+        (data.senderId === selectedFriendId && data.receiverId === selectedUserId) ||
+        (data.senderId === selectedUserId && data.receiverId === selectedFriendId)
       ) {
         getUserChat();
       }
@@ -502,10 +560,7 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
               </div>
               <div className="d-flex flex-column gap-0">
                 <h4>{friendData.name || "Calling..."}</h4>
-                <p className="
-                
-                
-                text-success">Calling...</p>
+                <p className="text-success">Calling...</p>
               </div>
             </div>
             <div className="d-flex align-items-center gap-3">
@@ -533,7 +588,7 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
               </div>
               <div className="d-flex flex-column gap-0">
                 <h4>{CallerName || "Unknown Caller"}</h4>
-                <p className="text-success">Incoming Call...</p>
+                <p className="text-success">Incoming {isVideoCall ? "Video" : "Audio"} Call...</p>
               </div>
             </div>
             <div className="d-flex align-items-center gap-3">
@@ -568,7 +623,9 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
               </div>
               <div className="d-flex flex-column gap-0">
                 <h4>{friendData.name || "In Call"}</h4>
-                <p className="text-success">Call in Progress: {callTimer}</p>
+                <p className="text-success">
+                  {isVideoCall ? "Video" : "Audio"} Call in Progress: {callTimer}
+                </p>
               </div>
             </div>
             <div className="d-flex align-items-center gap-3">
@@ -612,132 +669,130 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
     );
   };
 
-
   if (loading) {
     return (
       <div className="d-flex align-items-center h-100vh justify-content-center chat_box">
         <h1 className="text-center">Welcome to Chat Sphere.</h1>
-         <>
-        {outgoingCall && !callAccepted && !callRejected && (
-          <div className="call_pop d-flex align-items-center gap-4 justify-content-between">
-            <div className="d-flex align-items-center gap-3">
-              <div className="d-block flex-shrink-0 user-profile">
-                <img
-                  className="h-100 rounded-5 w-100"
-                  alt="profile"
-                  src={friendData.image ? `https://chat-sphere-tkbs.onrender.com${friendData.image}` : profile}
-                  onError={(e) => (e.target.src = profile)}
-                />
+        <>
+          {outgoingCall && !callAccepted && !callRejected && (
+            <div className="call_pop d-flex align-items-center gap-4 justify-content-between">
+              <div className="d-flex align-items-center gap-3">
+                <div className="d-block flex-shrink-0 user-profile">
+                  <img
+                    className="h-100 rounded-5 w-100"
+                    alt="profile"
+                    src={friendData.image ? `https://chat-sphere-tkbs.onrender.com${friendData.image}` : profile}
+                    onError={(e) => (e.target.src = profile)}
+                  />
+                </div>
+                <div className="d-flex flex-column gap-0">
+                  <h4>{friendData.name || "Calling..."}</h4>
+                  <p className="text-success">Calling...</p>
+                </div>
               </div>
-              <div className="d-flex flex-column gap-0">
-                <h4>{friendData.name || "Calling..."}</h4>
-                <p className="
-                
-                
-                text-success">Calling...</p>
+              <div className="d-flex align-items-center gap-3">
+                <button onClick={cancelCall} className="call_btn end">
+                  <img
+                    className="w-100 h-100"
+                    src={require("../assets/images/no-call.png")}
+                    alt="Cancel Call"
+                  />
+                </button>
               </div>
             </div>
-            <div className="d-flex align-items-center gap-3">
-              <button onClick={cancelCall} className="call_btn end">
-                <img
-                  className="w-100 h-100"
-                  src={require("../assets/images/no-call.png")}
-                  alt="Cancel Call"
-                />
-              </button>
-            </div>
-          </div>
-        )}
+          )}
 
-        {receivingCall && !callAccepted && !callRejected && (
-          <div className="call_pop d-flex align-items-center gap-4 justify-content-between">
-            <div className="d-flex align-items-center gap-3">
-              <div className="d-block flex-shrink-0 user-profile">
-                <img
-                  className="h-100 rounded-5 w-100"
-                  alt="profile"
-                  src={CallerProfile ? `https://chat-sphere-tkbs.onrender.com${CallerProfile}` : profile}
-                  onError={(e) => (e.target.src = profile)}
-                />
+          {receivingCall && !callAccepted && !callRejected && (
+            <div className="call_pop d-flex align-items-center gap-4 justify-content-between">
+              <div className="d-flex align-items-center gap-3">
+                <div className="d-block flex-shrink-0 user-profile">
+                  <img
+                    className="h-100 rounded-5 w-100"
+                    alt="profile"
+                    src={CallerProfile ? `https://chat-sphere-tkbs.onrender.com${CallerProfile}` : profile}
+                    onError={(e) => (e.target.src = profile)}
+                  />
+                </div>
+                <div className="d-flex flex-column gap-0">
+                  <h4>{CallerName || "Unknown Caller"}</h4>
+                  <p className="text-success">Incoming {isVideoCall ? "Video" : "Audio"} Call...</p>
+                </div>
               </div>
-              <div className="d-flex flex-column gap-0">
-                <h4>{CallerName || "Unknown Caller"}</h4>
-                <p className="text-success">Incoming Call...</p>
+              <div className="d-flex align-items-center gap-3">
+                <button onClick={answerCall} className="call_btn answer">
+                  <img
+                    className="w-100 h-100"
+                    src={require("../assets/images/call.png")}
+                    alt="Answer"
+                  />
+                </button>
+                <button onClick={rejectCall} className="call_btn end">
+                  <img
+                    className="w-100 h-100"
+                    src={require("../assets/images/no-call.png")}
+                    alt="Reject"
+                  />
+                </button>
               </div>
             </div>
-            <div className="d-flex align-items-center gap-3">
-              <button onClick={answerCall} className="call_btn answer">
-                <img
-                  className="w-100 h-100"
-                  src={require("../assets/images/call.png")}
-                  alt="Answer"
-                />
-              </button>
-              <button onClick={rejectCall} className="call_btn end">
-                <img
-                  className="w-100 h-100"
-                  src={require("../assets/images/no-call.png")}
-                  alt="Reject"
-                />
-              </button>
-            </div>
-          </div>
-        )}
+          )}
 
-        {callAccepted && !callRejected && (
-          <div className="call_pop d-flex align-items-center gap-4 justify-content-between">
-            <div className="d-flex align-items-center gap-3">
-              <div className="d-block flex-shrink-0 user-profile">
-                <img
-                  className="h-100 rounded-5 w-100"
-                  alt="profile"
-                  src={friendData.image ? `https://chat-sphere-tkbs.onrender.com${friendData.image}` : profile}
-                  onError={(e) => (e.target.src = profile)}
-                />
+          {callAccepted && !callRejected && (
+            <div className="call_pop d-flex align-items-center gap-4 justify-content-between">
+              <div className="d-flex align-items-center gap-3">
+                <div className="d-block flex-shrink-0 user-profile">
+                  <img
+                    className="h-100 rounded-5 w-100"
+                    alt="profile"
+                    src={friendData.image ? `https://chat-sphere-tkbs.onrender.com${friendData.image}` : profile}
+                    onError={(e) => (e.target.src = profile)}
+                  />
+                </div>
+                <div className="d-flex flex-column gap-0">
+                  <h4>{friendData.name || "In Call"}</h4>
+                  <p className="text-success">
+                    {isVideoCall ? "Video" : "Audio"} Call in Progress: {callTimer}
+                  </p>
+                </div>
               </div>
-              <div className="d-flex flex-column gap-0">
-                <h4>{friendData.name || "In Call"}</h4>
-                <p className="text-success">Call in Progress: {callTimer}</p>
+              <div className="d-flex align-items-center gap-3">
+                <button onClick={cancelCall} className="call_btn end">
+                  <img
+                    className="w-100 h-100"
+                    src={require("../assets/images/no-call.png")}
+                    alt="End Call"
+                  />
+                </button>
               </div>
             </div>
-            <div className="d-flex align-items-center gap-3">
-              <button onClick={cancelCall} className="call_btn end">
-                <img
-                  className="w-100 h-100"
-                  src={require("../assets/images/no-call.png")}
-                  alt="End Call"
-                />
-              </button>
-            </div>
-          </div>
-        )}
+          )}
 
-        {callRejected && (
-          <div className="call_pop d-flex align-items-center gap-4 justify-content-between">
-            <div className="d-flex align-items-center gap-3">
-              <div className="d-flex flex-column gap-0">
-                <h4>Call Rejected</h4>
-                <p className="text-danger">
-                  {friendData?.name || "User"} rejected your call.
-                </p>
+          {callRejected && (
+            <div className="call_pop d-flex align-items-center gap-4 justify-content-between">
+              <div className="d-flex align-items-center gap-3">
+                <div className="d-flex flex-column gap-0">
+                  <h4>Call Rejected</h4>
+                  <p className="text-danger">
+                    {friendData?.name || "User"} rejected your call.
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
 
-        {showCallEnded && (
-          <div className="call_pop d-flex align-items-center gap-4 justify-content-between">
-            <div className="d-flex align-items-center gap-3">
-              <div className="d-flex flex-column gap-0">
-                <h4>Call Ended</h4>
-                <p className="text-muted">
-                  Your call with {friendData?.name || "User"} has ended.
-                </p>
+          {showCallEnded && (
+            <div className="call_pop d-flex align-items-center gap-4 justify-content-between">
+              <div className="d-flex align-items-center gap-3">
+                <div className="d-flex flex-column gap-0">
+                  <h4>Call Ended</h4>
+                  <p className="text-muted">
+                    Your call with {friendData?.name || "User"} has ended.
+                  </p>
+                </div>
               </div>
             </div>
-          </div>
-        )}
-      </>
+          )}
+        </>
       </div>
     );
   }
@@ -820,6 +875,34 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
     }, 2000);
   };
 
+
+  const handleOpenUl = (index) => {
+    setOpenUlIndex(openUlIndex === index ? null : index);
+  };
+
+  const handleMessageClose = (index) => {
+    setOpenUlIndex(openUlIndex === index ? null : index);
+  }
+  function timeAgo(dateString) {
+    const now = new Date();
+    const date = new Date(dateString);
+    const diff = Math.floor((now - date) / 1000); // Difference in seconds
+
+    if (diff < 60) {
+      return "Just now";
+    } else if (diff < 3600) {
+      const minutes = Math.floor(diff / 60);
+      return `${minutes} minute${minutes !== 1 ? 's' : ''} ago`;
+    } else if (diff < 86400) {
+      const hours = Math.floor(diff / 3600);
+      return `${hours} hour${hours !== 1 ? 's' : ''} ago`;
+    } else {
+      const days = Math.floor(diff / 86400);
+      return `${days} day${days !== 1 ? 's' : ''} ago`;
+    }
+  }
+
+
   return (
     <div>
       <section className="d-block chat_box">
@@ -831,43 +914,38 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
                   className="h-100 rounded-5 w-100"
                   alt="profile"
                   src={`https://chat-sphere-tkbs.onrender.com${friendData.image}`}
-                  onError={(e) => (e.target.src = `${friendData.image}`)}
+                  onError={(e) => (e.target.src = profile)}
                 />
               </div>
               <div>
                 <h4>{friendData.name}</h4>
-                {onlineUsers.includes(selectedFriendId) ? (
-                  <p className="text-success"> Online</p>
-                ) : (
-                  <p className="text-muted"> Offline</p>
+                {!isTyping && typingUser !== selectedFriendId && (
+                  <p className={onlineUsers.includes(selectedFriendId) ? "text-success" : "text-muted"}>
+                    {onlineUsers.includes(selectedFriendId)
+                      ? "Online"
+                      : timeAgo(friendData.last_login)}
+                  </p>
+                )}
+
+                {isTyping && typingUser === selectedFriendId && (
+                  <p className="text-success">Typing...</p>
                 )}
               </div>
-              {isTyping && typingUser === selectedFriendId && (
-                <p className="text-muted">Typing...</p>
-              )}
+
             </div>
             <div className="d-flex align-items-center calls gap-3 pe-2">
-              <audio
-                ref={myAudio}
-                autoPlay
-                controls
-                style={{ display: "none" }}
-              />
-              <audio
-                ref={userAudio}
-                autoPlay
-                controls
-                style={{ display: "none" }}
-              />
+              <audio ref={myAudio} autoPlay style={{ display: "none" }} />
+              <audio ref={userAudio} autoPlay style={{ display: "none" }} />
               <button
-                onClick={() =>
-                  callUser(friendData.peer_ID, friendData.name, friendData.image)
-                }
+                onClick={() => callUser(friendData.peer_ID)}
                 disabled={outgoingCall || receivingCall || callAccepted}
               >
-                <IconPhone stroke={2} /> Call
+                <IconPhone stroke={2} />
               </button>
-              <button>
+              <button
+                onClick={() => startVideoCall(friendData.peer_ID)}
+                disabled={outgoingCall || receivingCall || callAccepted}
+              >
                 <IconVideoPlus stroke={2} />
               </button>
               <button>
@@ -876,10 +954,26 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
             </div>
           </div>
 
+          {callAccepted && isVideoCall && (
+            <div className="video-container">
+              <video
+                ref={myVideo}
+                autoPlay
+                muted
+                style={{ width: "300px", borderRadius: "8px" }}
+              />
+              <video
+                ref={userVideo}
+                autoPlay
+                style={{ width: "300px", borderRadius: "8px" }}
+              />
+            </div>
+          )}
+
           {renderCallPopups()}
 
           <div className="d-flex flex-column gap-3 main_chat px-4">
-            <ul className="d-flex flex-column list-unstyled gap-2 pe-2">
+            <ul className="d-flex flex-column main_ul list-unstyled gap-2 pe-2">
               {usermessage.map((message, index) => (
                 <li
                   key={index}
@@ -890,9 +984,7 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
                   }
                 >
                   <div
-                    className={`chat-bubble ${message.sender_id === selectedFriendId
-                      ? "received"
-                      : "sent"
+                    className={`chat-bubble ${message.sender_id === selectedFriendId ? "received" : "sent"
                       }`}
                   >
                     {message.message && <p className="px-2">{message.message}</p>}
@@ -937,7 +1029,26 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
                           📄 View Document
                         </a>
                       )}
+
                   </div>
+                  {message.sender_id !== selectedFriendId && (
+                    <div className="position-relative message_delete">
+                      <button onClick={() => handleOpenUl(index)} className="delete_dot_btn">
+                        <IconLineDashed />
+                      </button>
+                      {openUlIndex === index && (
+                        <ul className="dropdown-menu_ull">
+                          <li>
+                            <button onClick={() => handledeleteMessage(message.id, message.file_type, message.file_url)}>Delete</button>
+                          </li>
+                          <li>
+                            <button onClick={() => handleMessageClose(index)}>Cancel</button>
+                          </li>
+
+                        </ul>
+                      )}
+                    </div>
+                  )}
                 </li>
               ))}
               <div ref={messagesEndRef} />

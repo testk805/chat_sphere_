@@ -57,7 +57,6 @@ section {
   overflow: hidden;
 }
 
-
 /* Main Container */
 .container {
   max-width: 500px;
@@ -119,4 +118,15 @@ section {
 
 .resized {
   border: 2px solid #007bff;
+}
+.video-container {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  margin: 10px 0;
+}
+
+.video-container video {
+  border: 2px solid #ccc;
+  background: #000;
 }
