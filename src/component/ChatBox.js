@@ -1209,12 +1209,11 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
                         </a>
                       )}
                     </div>
-                    {message.sender_id === selectedUserId &&
-                      index === usermessage.length - 1 && (
-                        <span className="seen_text">
-                          {message.status === "seen" ? "Seen" : ""}
-                        </span>
-                      )}
+                    {message.sender_id === selectedUserId && (
+                      <span className="seen_text">
+                        {message.status}
+                      </span>
+                    )}
                   </div>
                   {message.sender_id !== selectedFriendId && (
                     <div className="position-relative message_delete">
