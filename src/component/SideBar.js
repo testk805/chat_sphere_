@@ -22,7 +22,7 @@ function SideBar({ setSelectedFriendId, setSelectedUserId }) {
   const [friendlist, setfriendlist] = useState([]);
   const [activeFriend, setActiveFriend] = useState(null);
 
-  const apiUrl = " https://chat-sphere-tkbs.onrender.com/api/";
+  const apiUrl = "https://chat-sphere-tkbs.onrender.com/api/";
 
   useEffect(() => {
     let storedData = localStorage.getItem("userData");
@@ -58,7 +58,7 @@ function SideBar({ setSelectedFriendId, setSelectedUserId }) {
   const Updatelastlogin = async () => {
     try {
       const response = await axios.post(apiUrl + "Updatelastlogin", { userEmail });
-      console.log(response.data);
+      
     } catch (error) {
       console.log(error);
     }
@@ -183,7 +183,7 @@ function SideBar({ setSelectedFriendId, setSelectedUserId }) {
                   <img
                     className="w-100 h-100"
                     alt="profile"
-                    src={` http://portfolio.hostingoncloud.in${loginData.image}`}
+                    src={`https://chat-sphere-tkbs.onrender.com${loginData.image}`}
                     onError={(e) => (e.target.src = `${loginData.image}`)} // Fallback if image is missing
                   />
                 )}
@@ -210,7 +210,7 @@ function SideBar({ setSelectedFriendId, setSelectedUserId }) {
                         <img
                           className="w-100 h-100 rounded-5"
                           alt="profile"
-                          src={` http://portfolio.hostingoncloud.in${item.image}`}
+                          src={`https://chat-sphere-tkbs.onrender.com${item.image}`}
                           onError={(e) => (e.target.src = `${item.image}`)} // Fallback if image is missing
                         />
                       </div>

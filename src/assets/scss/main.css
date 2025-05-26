@@ -192,7 +192,7 @@ body {
   margin: 0 auto;
   overflow: auto;
 }
-@media only screen and (max-width: 991.98px) {
+@media only screen and (max-width: 786.98px) {
   .login .left_login .main_left {
     width: 80%;
   }
@@ -502,7 +502,7 @@ body {
   overflow-y: auto;
   position: relative;
 }
-@media only screen and (max-width: 991.98px) {
+@media only screen and (max-width: 786.98px) {
   .side_bar {
     position: fixed;
     background: #fff;
@@ -725,7 +725,7 @@ body {
 .close_nav {
   display: none;
 }
-@media only screen and (max-width: 991.98px) {
+@media only screen and (max-width: 786.98px) {
   .close_nav {
     display: block;
     position: fixed;
@@ -992,11 +992,12 @@ video {
   background: transparent;
   color: #e0e0e0;
   width: 100%;
-  text-align: left;
+  text-align: center;
   font-size: 14px;
   font-weight: 500;
   display: flex;
   align-items: center;
+  justify-content: center;
   gap: 10px;
   cursor: pointer;
   transition: all 0.2s ease;

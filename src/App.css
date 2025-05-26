@@ -119,6 +119,7 @@ section {
 .resized {
   border: 2px solid #007bff;
 }
+
 .video-container {
   display: flex;
   gap: 10px;
@@ -129,4 +130,15 @@ section {
 .video-container video {
   border: 2px solid #ccc;
   background: #000;
+}
+
+span.seen_text {
+  font-size: 12px;
+  font-weight: 400;
+  color: #000;
+}
+
+.message_width {
+  width: -webkit-fill-available;
+  width: -moz-available;
 }

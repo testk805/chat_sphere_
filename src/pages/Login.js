@@ -57,7 +57,7 @@ export default function Login() {
     localStorage.setItem("userData", JSON.stringify(formData.email));
     try {
       const response = await axios.post(apiUrl + "google", formData);
-      console.log(response.data);
+      
       if (response.data.status === 1) {
         setShowSuccess(true);
         setSuccess(response.data.message);
@@ -187,7 +187,7 @@ export default function Login() {
     };
     try {
       const response = await axios.post(apiUrl + "create", formData);
-      console.log(response.data);
+      
       if (response.data.status === 1) {
         setShowSuccess(true);
         setSuccess(response.data.message);
@@ -229,7 +229,7 @@ export default function Login() {
         const response = await axios.post(apiUrl + "loginwithotp", {
           user_email,
         });
-        console.log(response.data);
+        
         if (response.data.success) {
           setSuccess(response.data.message);
           setloader(false);
@@ -262,7 +262,7 @@ export default function Login() {
           storedEmail,
           otp,
         });
-        console.log(response.data);
+        
         if (response.data.success === true) {
           setSuccess(response.data.message);
           setShowSuccess(true);
@@ -374,7 +374,7 @@ export default function Login() {
           storedEmail,
           otp,
         });
-        console.log(response.data);
+        
         if (response.data.success === true) {
           setSuccess(response.data.message);
           setloader(false);
@@ -488,7 +488,7 @@ export default function Login() {
         user_email,
         userOTP,
       });
-      console.log(response.data);
+      
       if (response.data.success === 1) {
         setverifyedOtp(true);
       } else if (response.data.success === 2) {

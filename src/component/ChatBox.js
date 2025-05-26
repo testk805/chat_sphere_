@@ -29,6 +29,7 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
   const [onlineUsers, setOnlineUsers] = useState([]);
   const [loader, setloader] = useState(false);
   const [sendHide, setsendHide] = useState(true);
+  const chatContainerRef = useRef(null);
   const [imagePreview, setImagePreview] = useState(null);
   const [docPreview, setDocPreview] = useState(null);
   const [userEmail, setuserEmail] = useState("");
@@ -42,6 +43,7 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
   const [CallerName, setCallerName] = useState("");
   const [openUlIndex, setOpenUlIndex] = useState(null);
   const [CallerProfile, setCallerProfile] = useState("");
+  const [isChatOpen, setIsChatOpen] = useState(true);
   const [isRinging, setIsRinging] = useState(false);
   const [callRejected, setCallRejected] = useState(false);
   const [showCallEnded, setShowCallEnded] = useState(false);
@@ -60,6 +62,45 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
     profile: "",
   });
   const connectionRef = useRef();
+  const lastMessageRef = useRef(null);
+
+  const isLastMessageVisible = () => {
+    if (!lastMessageRef.current) return false;
+    const rect = lastMessageRef.current.getBoundingClientRect();
+    return (
+      rect.top >= 0 &&
+      rect.bottom <=
+        (window.innerHeight || document.documentElement.clientHeight)
+    );
+  };
+
+  const markAsSeen = async () => {
+    try {
+      await SeenAllMessage(selectedFriendId, selectedUserId);
+      socket.current.emit("SeenMessage", {
+        senderId: selectedUserId,
+        receiverId: selectedFriendId,
+      });
+    } catch (err) {
+      console.error("markAsSeen error:", err);
+    }
+  };
+
+  useEffect(() => {
+    const handleFocus = () => {
+      if (!isChatOpen || usermessage.length === 0) return;
+
+      const lastMsg = usermessage[usermessage.length - 1];
+      const isMyMessage = lastMsg.sender_id !== selectedUserId;
+
+      if (isLastMessageVisible() && isMyMessage && lastMsg.status !== "seen") {
+        markAsSeen();
+      }
+    };
+
+    window.addEventListener("focus", handleFocus);
+    return () => window.removeEventListener("focus", handleFocus);
+  }, [usermessage, isChatOpen]);
 
   const playRingtone = () => {
     ring.load();
@@ -85,7 +126,12 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
     setCallTimer("00:00");
     stopRingtone();
 
-    [myAudio.current, userAudio.current, myVideo.current, userVideo.current].forEach((media) => {
+    [
+      myAudio.current,
+      userAudio.current,
+      myVideo.current,
+      userVideo.current,
+    ].forEach((media) => {
       if (media?.srcObject) {
         media.srcObject.getTracks().forEach((track) => track.stop());
         media.srcObject = null;
@@ -99,7 +145,9 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
       timerInterval = setInterval(() => {
         const now = new Date();
         const diff = Math.floor((now - callStartTime) / 1000);
-        const minutes = Math.floor(diff / 60).toString().padStart(2, "0");
+        const minutes = Math.floor(diff / 60)
+          .toString()
+          .padStart(2, "0");
         const seconds = (diff % 60).toString().padStart(2, "0");
         setCallTimer(`${minutes}:${seconds}`);
       }, 1000);
@@ -114,7 +162,7 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
   }, []);
 
   useEffect(() => {
-    socketRef.current = io("wss://chat-sphere-tkbs.onrender.com/", {
+    socketRef.current = io("ws://localhost:3001/", {
       transports: ["websocket"],
     });
 
@@ -193,18 +241,20 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
   }, [userEmail]);
 
   const handledeleteMessage = async (id, type, file_url) => {
-
     try {
-      const response = await axios.post(apiUrl + "handledeleteMessage", { id, type, file_url });
-      console.log(response.data);
+      const response = await axios.post(apiUrl + "handledeleteMessage", {
+        id,
+        type,
+        file_url,
+      });
+
       if (response.data.status === 1) {
         getUserChat();
       }
     } catch (error) {
       return console.log(error);
     }
-  }
-
+  };
 
   const fetchUserData = async () => {
     try {
@@ -335,7 +385,10 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
 
   const answerCall = () => {
     const constraints = isVideoCall
-      ? { video: { width: { ideal: 1280 }, height: { ideal: 720 } }, audio: true }
+      ? {
+          video: { width: { ideal: 1280 }, height: { ideal: 720 } },
+          audio: true,
+        }
       : { audio: true };
 
     navigator.mediaDevices
@@ -392,7 +445,12 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
     setCallStartTime(null);
     setCallTimer("00:00");
     stopRingtone();
-    [myAudio.current, userAudio.current, myVideo.current, userVideo.current].forEach((media) => {
+    [
+      myAudio.current,
+      userAudio.current,
+      myVideo.current,
+      userVideo.current,
+    ].forEach((media) => {
       if (media?.srcObject) {
         media.srcObject.getTracks().forEach((track) => track.stop());
       }
@@ -445,7 +503,7 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
   };
 
   useEffect(() => {
-    socket.current = io("wss://chat-sphere-tkbs.onrender.com", { transports: ["websocket"] });
+    socket.current = io("ws://localhost:3001", { transports: ["websocket"] });
 
     if (selectedUserId) {
       socket.current.emit("userOnline", selectedUserId);
@@ -459,10 +517,19 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
 
     socket.current.on("refreshData", (data) => {
       if (
-        (data.senderId === selectedFriendId && data.receiverId === selectedUserId) ||
-        (data.senderId === selectedUserId && data.receiverId === selectedFriendId)
+        (data.senderId === selectedFriendId &&
+          data.receiverId === selectedUserId) ||
+        (data.senderId === selectedUserId &&
+          data.receiverId === selectedFriendId)
       ) {
         getUserChat();
+      }
+    });
+
+    socket.current.on("SeenMessage", ({ senderId, receiverId }) => {
+      if (receiverId === selectedUserId && senderId === selectedFriendId) {
+        getUserChat();
+        console.log(`seen by ${senderId}`);
       }
     });
 
@@ -500,9 +567,75 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
     };
   }, [selectedFriendId, selectedUserId]);
 
+  const [allMessagesSeen, setAllMessagesSeen] = useState(false);
+
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    if (messagesEndRef.current && chatContainerRef.current) {
+      messagesEndRef.current.scrollIntoView({ behavior: "smooth" });
+    }
   }, [usermessage]);
+
+  useEffect(() => {
+    if (!chatContainerRef.current || !messagesEndRef.current) return;
+
+    // Create a flag to prevent multiple calls
+    let isProcessing = false;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && !isProcessing) {
+          isProcessing = true; // Set flag to prevent multiple calls
+          SeenAllMessage(selectedFriendId, selectedUserId)
+            .then(() => {
+              setAllMessagesSeen(true);
+              setTimeout(() => {
+                setAllMessagesSeen(false);
+                isProcessing = false; // Reset flag after timeout
+              }, 3000);
+            })
+            .catch((err) => {
+              console.error("Error in SeenAllMessage:", err);
+              isProcessing = false; // Reset flag on error
+            });
+        }
+      },
+      {
+        root: chatContainerRef.current,
+        threshold: 1.0,
+      }
+    );
+
+    // Observe the last message
+    const currentMessagesEndRef = messagesEndRef.current;
+    if (currentMessagesEndRef) {
+      observer.observe(currentMessagesEndRef);
+    }
+
+    // Cleanup observer
+    return () => {
+      if (currentMessagesEndRef) {
+        observer.unobserve(currentMessagesEndRef);
+      }
+      observer.disconnect(); // Ensure observer is fully disconnected
+    };
+  }, [selectedFriendId, selectedUserId]); // Remove usermessage from dependencies
+
+  const SeenAllMessage = async (fid, uid) => {
+    try {
+      const response = await axios.post(apiUrl + "seenallmessage", {
+        fid,
+        uid,
+      });
+      if (response.data.status === 1) {
+        socket.current.emit("SeenMessage", {
+          senderId: uid,
+          receiverId: fid,
+        });
+      }
+    } catch (error) {
+      console.error("Error in SeenAllMessage:", error);
+    }
+  };
 
   useEffect(() => {
     if (selectedFriendId) {
@@ -554,7 +687,11 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
                 <img
                   className="h-100 rounded-5 w-100"
                   alt="profile"
-                  src={friendData.image ? `https://chat-sphere-tkbs.onrender.com${friendData.image}` : profile}
+                  src={
+                    friendData.image
+                      ? `https://chat-sphere-tkbs.onrender.com${friendData.image}`
+                      : profile
+                  }
                   onError={(e) => (e.target.src = profile)}
                 />
               </div>
@@ -582,13 +719,19 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
                 <img
                   className="h-100 rounded-5 w-100"
                   alt="profile"
-                  src={CallerProfile ? `https://chat-sphere-tkbs.onrender.com${CallerProfile}` : profile}
+                  src={
+                    CallerProfile
+                      ? `https://chat-sphere-tkbs.onrender.com${CallerProfile}`
+                      : profile
+                  }
                   onError={(e) => (e.target.src = profile)}
                 />
               </div>
               <div className="d-flex flex-column gap-0">
                 <h4>{CallerName || "Unknown Caller"}</h4>
-                <p className="text-success">Incoming {isVideoCall ? "Video" : "Audio"} Call...</p>
+                <p className="text-success">
+                  Incoming {isVideoCall ? "Video" : "Audio"} Call...
+                </p>
               </div>
             </div>
             <div className="d-flex align-items-center gap-3">
@@ -617,14 +760,19 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
                 <img
                   className="h-100 rounded-5 w-100"
                   alt="profile"
-                  src={friendData.image ? `https://chat-sphere-tkbs.onrender.com${friendData.image}` : profile}
+                  src={
+                    friendData.image
+                      ? `https://chat-sphere-tkbs.onrender.com${friendData.image}`
+                      : profile
+                  }
                   onError={(e) => (e.target.src = profile)}
                 />
               </div>
               <div className="d-flex flex-column gap-0">
                 <h4>{friendData.name || "In Call"}</h4>
                 <p className="text-success">
-                  {isVideoCall ? "Video" : "Audio"} Call in Progress: {callTimer}
+                  {isVideoCall ? "Video" : "Audio"} Call in Progress:{" "}
+                  {callTimer}
                 </p>
               </div>
             </div>
@@ -681,7 +829,11 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
                   <img
                     className="h-100 rounded-5 w-100"
                     alt="profile"
-                    src={friendData.image ? `https://chat-sphere-tkbs.onrender.com${friendData.image}` : profile}
+                    src={
+                      friendData.image
+                        ? `https://chat-sphere-tkbs.onrender.com${friendData.image}`
+                        : profile
+                    }
                     onError={(e) => (e.target.src = profile)}
                   />
                 </div>
@@ -709,13 +861,19 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
                   <img
                     className="h-100 rounded-5 w-100"
                     alt="profile"
-                    src={CallerProfile ? `https://chat-sphere-tkbs.onrender.com${CallerProfile}` : profile}
+                    src={
+                      CallerProfile
+                        ? `https://chat-sphere-tkbs.onrender.com${CallerProfile}`
+                        : profile
+                    }
                     onError={(e) => (e.target.src = profile)}
                   />
                 </div>
                 <div className="d-flex flex-column gap-0">
                   <h4>{CallerName || "Unknown Caller"}</h4>
-                  <p className="text-success">Incoming {isVideoCall ? "Video" : "Audio"} Call...</p>
+                  <p className="text-success">
+                    Incoming {isVideoCall ? "Video" : "Audio"} Call...
+                  </p>
                 </div>
               </div>
               <div className="d-flex align-items-center gap-3">
@@ -744,14 +902,19 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
                   <img
                     className="h-100 rounded-5 w-100"
                     alt="profile"
-                    src={friendData.image ? `https://chat-sphere-tkbs.onrender.com${friendData.image}` : profile}
+                    src={
+                      friendData.image
+                        ? `https://chat-sphere-tkbs.onrender.com${friendData.image}`
+                        : profile
+                    }
                     onError={(e) => (e.target.src = profile)}
                   />
                 </div>
                 <div className="d-flex flex-column gap-0">
                   <h4>{friendData.name || "In Call"}</h4>
                   <p className="text-success">
-                    {isVideoCall ? "Video" : "Audio"} Call in Progress: {callTimer}
+                    {isVideoCall ? "Video" : "Audio"} Call in Progress:{" "}
+                    {callTimer}
                   </p>
                 </div>
               </div>
@@ -875,14 +1038,13 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
     }, 2000);
   };
 
-
   const handleOpenUl = (index) => {
     setOpenUlIndex(openUlIndex === index ? null : index);
   };
 
   const handleMessageClose = (index) => {
     setOpenUlIndex(openUlIndex === index ? null : index);
-  }
+  };
   function timeAgo(dateString) {
     const now = new Date();
     const date = new Date(dateString);
@@ -892,16 +1054,15 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
       return "Just now";
     } else if (diff < 3600) {
       const minutes = Math.floor(diff / 60);
-      return `${minutes} minute${minutes !== 1 ? 's' : ''} ago`;
+      return `${minutes} minute${minutes !== 1 ? "s" : ""} ago`;
     } else if (diff < 86400) {
       const hours = Math.floor(diff / 3600);
-      return `${hours} hour${hours !== 1 ? 's' : ''} ago`;
+      return `${hours} hour${hours !== 1 ? "s" : ""} ago`;
     } else {
       const days = Math.floor(diff / 86400);
-      return `${days} day${days !== 1 ? 's' : ''} ago`;
+      return `${days} day${days !== 1 ? "s" : ""} ago`;
     }
   }
-
 
   return (
     <div>
@@ -917,10 +1078,17 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
                   onError={(e) => (e.target.src = profile)}
                 />
               </div>
+
               <div>
                 <h4>{friendData.name}</h4>
                 {!isTyping && typingUser !== selectedFriendId && (
-                  <p className={onlineUsers.includes(selectedFriendId) ? "text-success" : "text-muted"}>
+                  <p
+                    className={
+                      onlineUsers.includes(selectedFriendId)
+                        ? "text-success"
+                        : "text-muted"
+                    }
+                  >
                     {onlineUsers.includes(selectedFriendId)
                       ? "Online"
                       : timeAgo(friendData.last_login)}
@@ -931,7 +1099,6 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
                   <p className="text-success">Typing...</p>
                 )}
               </div>
-
             </div>
             <div className="d-flex align-items-center calls gap-3 pe-2">
               <audio ref={myAudio} autoPlay style={{ display: "none" }} />
@@ -973,53 +1140,65 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
           {renderCallPopups()}
 
           <div className="d-flex flex-column gap-3 main_chat px-4">
-            <ul className="d-flex flex-column main_ul list-unstyled gap-2 pe-2">
+            <ul
+              className="d-flex flex-column main_ul list-unstyled gap-2 pe-2"
+              ref={chatContainerRef}
+            >
               {usermessage.map((message, index) => (
                 <li
                   key={index}
+                  ref={index === usermessage.length - 1 ? lastMessageRef : null}
                   className={
                     message.sender_id === selectedUserId
                       ? "right_mess text-end"
                       : "left_mess"
                   }
                 >
-                  <div
-                    className={`chat-bubble ${message.sender_id === selectedFriendId ? "received" : "sent"
+                  <div className="d-flex flex-column gap-0 message_width">
+                    <div
+                      className={`chat-bubble ${
+                        message.sender_id === selectedFriendId
+                          ? "received"
+                          : "sent"
                       }`}
-                  >
-                    {message.message && <p className="px-2">{message.message}</p>}
-                    {message.file_type?.startsWith("image/") && (
-                      <img
-                        src={`https://chat-sphere-tkbs.onrender.com/${message.file_url}`}
-                        alt="sent-img"
-                        className="chat-image"
-                        style={{ maxWidth: "200px", borderRadius: "8px" }}
-                      />
-                    )}
-                    {message.file_type?.startsWith("video/") && (
-                      <video controls width="200">
-                        <source
+                    >
+                      <div className="position-relative">
+                        {message.message && (
+                          <p className="px-2">{message.message}</p>
+                        )}
+                      </div>
+                      {message.file_type?.startsWith("image/") && (
+                        <img
                           src={`https://chat-sphere-tkbs.onrender.com/${message.file_url}`}
-                          type={message.file_type}
+                          alt="sent-img"
+                          className="chat-image"
+                          style={{ maxWidth: "200px", borderRadius: "8px" }}
                         />
-                        Your browser does not support videos.
-                      </video>
-                    )}
-                    {message.file_type?.startsWith("audio/") && (
-                      <audio controls>
-                        <source
-                          src={`https://chat-sphere-tkbs.onrender.com/${message.file_url}`}
-                          type={message.file_type}
-                        />
-                        Your browser does not support audio playback.
-                      </audio>
-                    )}
-                    {[
-                      "application/pdf",
-                      "application/msword",
-                      "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                      "text/plain",
-                    ].includes(message.file_type) && (
+                      )}
+                      {message.file_type?.startsWith("video/") && (
+                        <video controls width="200">
+                          <source
+                            src={`https://chat-sphere-tkbs.onrender.com/${message.file_url}`}
+                            type={message.file_type}
+                          />
+                          Your browser does not support videos.
+                        </video>
+                      )}
+                      {message.file_type?.startsWith("audio/") && (
+                        <audio controls>
+                          <source
+                            src={`https://chat-sphere-tkbs.onrender.com/${message.file_url}`}
+                            type={message.file_type}
+                          />
+                          Your browser does not support audio playback.
+                        </audio>
+                      )}
+                      {[
+                        "application/pdf",
+                        "application/msword",
+                        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        "text/plain",
+                      ].includes(message.file_type) && (
                         <a
                           href={`https://chat-sphere-tkbs.onrender.com/${message.file_url}`}
                           target="_blank"
@@ -1029,22 +1208,42 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
                           📄 View Document
                         </a>
                       )}
-
+                    </div>
+                    {message.sender_id === selectedUserId &&
+                      index === usermessage.length - 1 && (
+                        <span className="seen_text">
+                          {message.status === "seen" ? "Seen" : ""}
+                        </span>
+                      )}
                   </div>
                   {message.sender_id !== selectedFriendId && (
                     <div className="position-relative message_delete">
-                      <button onClick={() => handleOpenUl(index)} className="delete_dot_btn">
+                      <button
+                        onClick={() => handleOpenUl(index)}
+                        className="delete_dot_btn"
+                      >
                         <IconLineDashed />
                       </button>
                       {openUlIndex === index && (
                         <ul className="dropdown-menu_ull">
                           <li>
-                            <button onClick={() => handledeleteMessage(message.id, message.file_type, message.file_url)}>Delete</button>
+                            <button
+                              onClick={() =>
+                                handledeleteMessage(
+                                  message.id,
+                                  message.file_type,
+                                  message.file_url
+                                )
+                              }
+                            >
+                              Delete
+                            </button>
                           </li>
                           <li>
-                            <button onClick={() => handleMessageClose(index)}>Cancel</button>
+                            <button onClick={() => handleMessageClose(index)}>
+                              Cancel
+                            </button>
                           </li>
-
                         </ul>
                       )}
                     </div>
@@ -1121,7 +1320,9 @@ export default function ChatBox({ selectedFriendId, selectedUserId }) {
                     <div className="loader"></div>
                   </div>
                 )}
-                <button type="submit">{sendHide && <IconBrandTelegram />}</button>
+                <button type="submit">
+                  {sendHide && <IconBrandTelegram />}
+                </button>
               </div>
             </form>
           </div>

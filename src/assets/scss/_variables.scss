@@ -43,7 +43,7 @@ $trans: 0.3s all ease-in-out;
   }
 }
 @mixin md {
-  @media only screen and (max-width: 991.98px) {
+  @media only screen and (max-width: 786.98px) {
     @content;
   }
 }
